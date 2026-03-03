@@ -79,7 +79,7 @@ cur.execute(
 (lid, listing["title"], listing["rent_price"], listing["bedrooms"],
 listing["neighborhood"], listing["url"], listing["description"],
 listing.get("source", "unknown"), now, now, ph),
-0, "fi
+0, "fi"
 )
 conn.commit()
 conn.close()
