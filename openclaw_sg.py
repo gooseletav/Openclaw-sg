@@ -21,11 +21,16 @@ DB_PATH     = "openclaw_sg.db"
 MIN_BEDS    = 4
 MAX_RENT    = 4000
 MIN_RENT    = 1800
-TARGET_ZIP  = "91776"
 
 APIFY_RUN_URL = "https://api.apify.com/v2/acts/tri_angle~real-estate-aggregator/run-sync-get-dataset-items"
-APIFY_INPUT = {
-    "location": TARGET_ZIP,
+
+SEARCH_ZIPS = [
+    "91776", "91775", "91801", "91803", "91108",
+    "91770", "91780", "91755", "91754", "91007",
+    "91030", "91101", "91106",
+]
+
+APIFY_INPUT_TEMPLATE = {
     "offerType": "rent",
     "providers": ["zillow", "realtor", "zumper", "apartments"],
     "maxResultsPerProvider": 50,
@@ -146,69 +151,91 @@ def collect_apify():
     if not APIFY_TOKEN:
         log.warning("No APIFY_TOKEN set.")
         return []
-    try:
-        log.info("Calling Apify for zip %s...", TARGET_ZIP)
-        resp = requests.post(
-            APIFY_RUN_URL,
-            params={"token": APIFY_TOKEN, "timeout": 120, "memory": 512},
-            json=APIFY_INPUT,
-            timeout=150,
-        )
-        resp.raise_for_status()
-        raw = resp.json()
-        results = []
-        for item in raw:
-            price = item.get("price") or item.get("rentZestimate") or item.get("rent")
-            if isinstance(price, dict):
-                price = float(list(price.values())[0])
-            elif isinstance(price, str):
-                price = _flt(_PRICE_RE, price)
-            if not price or not (MIN_RENT <= float(price) <= MAX_RENT + 400):
-                continue
-            beds = item.get("bedrooms") or item.get("beds")
-            try:
-                if isinstance(beds, dict):
-                    beds = float(list(beds.values())[0])
-                else:
-                    beds = float(beds)
-            except Exception:
-                beds = float(MIN_BEDS)
-            if beds < MIN_BEDS:
-                continue
-            urls = item.get("urls") or {}
-            if isinstance(urls, dict):
-                url = (urls.get("zillow") or urls.get("realtor") or
-                       urls.get("zumper") or urls.get("apartments") or
-                       next(iter(urls.values()), ""))
-            elif isinstance(urls, list):
-                url = urls[0] if urls else ""
+
+    all_raw = []
+    for zip_code in SEARCH_ZIPS:
+        log.info("Calling Apify for zip %s...", zip_code)
+        payload = {**APIFY_INPUT_TEMPLATE, "location": zip_code}
+        try:
+            resp = requests.post(
+                APIFY_RUN_URL,
+                params={"token": APIFY_TOKEN, "timeout": 120, "memory": 512},
+                json=payload,
+                timeout=150,
+            )
+            resp.raise_for_status()
+            all_raw.extend(resp.json())
+            time.sleep(2)
+        except Exception as zip_ex:
+            log.error("Zip %s error: %s", zip_code, zip_ex)
+            continue
+
+    results = []
+    seen_ids = set()
+
+    for item in all_raw:
+        item_id = str(item.get("localId", "")) + str(item.get("street", ""))
+        if item_id in seen_ids:
+            continue
+        seen_ids.add(item_id)
+
+        price = item.get("price") or item.get("rentZestimate") or item.get("rent")
+        if isinstance(price, dict):
+            price = float(list(price.values())[0])
+        elif isinstance(price, str):
+            price = _flt(_PRICE_RE, price)
+        if not price or not (MIN_RENT <= float(price) <= MAX_RENT + 400):
+            continue
+
+        beds = item.get("bedrooms") or item.get("beds")
+        try:
+            if isinstance(beds, dict):
+                beds = float(list(beds.values())[0])
             else:
-                url = str(urls) if urls else ""
-            street = item.get("street") or ""
-            city   = item.get("city") or "San Gabriel"
-            state  = item.get("state") or "CA"
-            title  = (street + ", " + city + " " + state).strip(", ") or "Rental"
-            desc  = item.get("description") or item.get("homeDescription") or ""
-            addr  = item.get("address", "")
-            hood  = item.get("neighborhood") or item.get("city") or (addr.split(",")[-2].strip() if "," in addr else "San Gabriel")
-            src_map = {"zillow": "zillow", "realtor": "realtor.com", "zumper": "zumper", "apartments": "apartments.com"}
-            src   = src_map.get(item.get("provider", ""), item.get("provider", "apify"))
-            lid   = hashlib.md5((url or title + str(price)).encode()).hexdigest()
-            results.append({
-                "listing_id":   lid,
-                "title":        str(title).strip(),
-                "rent_price":   float(price),
-                "bedrooms":     beds,
-                "neighborhood": str(hood).strip(),
-                "url":          url,
-                "description":  str(desc)[:600],
-                "source":       src,
-            })
-        log.info("Apify: %d listings after filter", len(results))
-        return results
-    except Exception as ex:
-        log.error("Apify error: %s", ex)
-        return []
+                beds = float(beds)
+        except Exception:
+            continue
+        if not beds or beds < MIN_BEDS:
+            continue
+
+        urls = item.get("urls") or {}
+        if isinstance(urls, dict):
+            url = (urls.get("zillow") or urls.get("realtor") or
+                   urls.get("zumper") or urls.get("apartments") or
+                   next(iter(urls.values()), ""))
+        elif isinstance(urls, list):
+            url = urls[0] if urls else ""
+        else:
+            url = str(urls) if urls else ""
+
+        street = item.get("street") or ""
+        city   = item.get("city") or "San Gabriel"
+        state  = item.get("state") or "CA"
+        title  = (street + ", " + city + " " + state).strip(", ") or "Rental"
+
+        desc  = item.get("description") or item.get("homeDescription") or ""
+        addr  = item.get("address", "")
+        hood  = item.get("neighborhood") or item.get("city") or (addr.split(",")[-2].strip() if "," in addr else "San Gabriel")
+
+        providers = item.get("providers") or []
+        src_map = {"zillow": "zillow", "realtor": "realtor.com", "zumper": "zumper", "apartments": "apartments.com"}
+        src = src_map.get(providers[0] if providers else "", "unknown")
+
+        lid = hashlib.md5((url or title + str(price)).encode()).hexdigest()
+
+        results.append({
+            "listing_id":   lid,
+            "title":        str(title).strip(),
+            "rent_price":   float(price),
+            "bedrooms":     beds,
+            "neighborhood": str(hood).strip(),
+            "url":          url,
+            "description":  str(desc)[:600],
+            "source":       src,
+        })
+
+    log.info("Apify total: %d listings after filter", len(results))
+    return results
 
 
 def kw_score(text):
@@ -252,24 +279,51 @@ def compute_offer(rent, score):
     return round(rent * pct / 50) * 50, st, pr
 
 
-def send_telegram(msg):
+def build_offer_message(title, asking, offer, url):
+    pct_off = int(((asking - offer) / asking) * 100)
+    return (
+        "Hi, I came across your listing at " + title + " and I am very interested. "
+        "I have a stable income, excellent rental history, and could move in quickly. "
+        "Given current market conditions I wanted to respectfully ask if you would consider "
+        "$" + str(int(offer)) + "/mo. "
+        "I am happy to sign a longer lease for the right place. "
+        "Please let me know if you would like to connect. Thank you!"
+    )
+
+
+def send_telegram(msg, listing_url="", offer=0, asking=0, title=""):
     if not BOT_TOKEN or not CHAT_ID:
         print(msg)
         return
     try:
+        keyboard = {"inline_keyboard": [[
+            {"text": "View Listing", "url": listing_url} if listing_url else {"text": "No Link", "callback_data": "none"},
+        ]]}
         r = requests.post(
             "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage",
-            json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML"},
+            json={"chat_id": CHAT_ID, "text": msg, "parse_mode": "HTML",
+                  "reply_markup": keyboard},
             timeout=10,
         )
         r.raise_for_status()
+
+        offer_msg = build_offer_message(title, asking, offer, listing_url)
+        r2 = requests.post(
+            "https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage",
+            json={"chat_id": CHAT_ID,
+                  "text": "Copy and send this offer message:\n\n" + offer_msg,
+                  "parse_mode": "HTML"},
+            timeout=10,
+        )
+        r2.raise_for_status()
+
     except Exception as e:
         log.error("Telegram error: %s", e)
 
 
 def build_alert(listing, offer, strength, prob, score, details):
-    src      = listing.get("source", "").upper()
-    kw_line  = ""
+    src     = listing.get("source", "").upper()
+    kw_line = ""
     if details["matched_keywords"]:
         kw_line = "\nKeywords: " + ", ".join(details["matched_keywords"][:5])
     extras = ""
@@ -288,8 +342,7 @@ def build_alert(listing, offer, strength, prob, score, details):
         + "Offer: $" + str(int(offer)) + "/mo (saves $" + str(savings) + "/mo)\n"
         + "Distress: " + str(int(score)) + "/100 | Leverage: " + strength + "\n"
         + "Acceptance est: " + str(int(prob * 100)) + "%"
-        + dom_line + extras + kw_line + "\n\n"
-        + str(listing["url"])
+        + dom_line + extras + kw_line
     )
 
 
@@ -309,10 +362,16 @@ def run():
         if listing["rent_price"] > MAX_RENT and score < 65:
             continue
         msg = build_alert(listing, offer, strength, prob, score, details)
-        send_telegram(msg)
+        send_telegram(
+            msg,
+            listing_url=listing["url"],
+            offer=offer,
+            asking=listing["rent_price"],
+            title=listing["title"],
+        )
         mark_alerted(listing["listing_id"])
         alerts += 1
-        time.sleep(0.4)
+        time.sleep(0.5)
     log.info("Done. %d alerts sent.", alerts)
 
 
