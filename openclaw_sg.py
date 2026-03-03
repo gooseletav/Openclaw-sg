@@ -175,7 +175,10 @@ def collect_apify():
                 beds = float(MIN_BEDS)
             if beds < MIN_BEDS:
                 continue
-            url   = item.get("url") or item.get("detailUrl") or ""
+            url   = (item.get("url") or item.get("detailUrl") or
+                    item.get("hdpUrl") or item.get("listingUrl") or
+                    item.get("permalink") or item.get("link") or "")
+            log.info("ITEM KEYS: %s", list(item.keys()))
             title = item.get("streetAddress") or item.get("address") or "Rental"
             desc  = item.get("description") or item.get("homeDescription") or ""
             addr  = item.get("address", "")
