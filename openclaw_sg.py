@@ -159,13 +159,18 @@ def collect_apify():
         results = []
         for item in raw:
             price = item.get("price") or item.get("rentZestimate") or item.get("rent")
-            if isinstance(price, str):
+            if isinstance(price, dict):
+                price = float(list(price.values())[0])
+            elif isinstance(price, str):
                 price = _flt(_PRICE_RE, price)
             if not price or not (MIN_RENT <= float(price) <= MAX_RENT + 400):
                 continue
             beds = item.get("bedrooms") or item.get("beds")
             try:
-                beds = float(beds)
+                if isinstance(beds, dict):
+                    beds = float(list(beds.values())[0])
+                else:
+                    beds = float(beds)
             except Exception:
                 beds = float(MIN_BEDS)
             if beds < MIN_BEDS:
