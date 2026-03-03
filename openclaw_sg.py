@@ -21,8 +21,8 @@ MAX_RENT = 4000
 MIN_RENT = 1800
 TARGET_ZIP = "91776"
 RSS_FEEDS = [
-"https://losangeles.craigslist.org/search/sgv/apa?format=rss&min_bedrooms=4&max_price=420
-"https://losangeles.craigslist.org/search/lac/apa?format=rss&min_bedrooms=4&max_price=420
+"https://losangeles.craigslist.org/search/sgv/apa?format=&min_bedrooms=4&max_price=4000
+"https://losangeles.craigslist.org/search/lac/apa?format=&min_bedrooms=4&max_price=4000
 ]
 APIFY_ACTOR = "tri_angle/real-estate-aggregator"
 APIFY_RUN_URL = "https://api.apify.com/v2/acts/" + APIFY_ACTOR + "/run-sync-get-dataset-items
