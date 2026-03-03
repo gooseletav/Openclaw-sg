@@ -1,0 +1,44 @@
+name: OpenClaw-SG Scanner
+
+on:
+
+  schedule:
+
+    - cron: '0 */2 * * *'
+
+  workflow_dispatch:
+
+jobs:
+
+  scan:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+
+        uses: actions/setup-python@v4
+
+        with:
+
+          python-version: '3.11'
+
+      - name: Install dependencies
+
+        run: pip install requests feedparser python-dotenv
+
+      - name: Run OpenClaw
+
+        env:
+
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+
+        run: python openclaw_sg.py
+ 
