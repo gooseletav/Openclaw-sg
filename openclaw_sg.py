@@ -1,4 +1,4 @@
-yaml
+import os
 name: OpenClaw-SG Scanner
 
 on:
