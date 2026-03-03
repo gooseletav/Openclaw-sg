@@ -75,7 +75,7 @@ row = cur.fetchone()
 if row is None:
 ph = json.dumps([{"p": listing["rent_price"], "d": now}])
 cur.execute(
-"INSERT INTO listings (listing_id,title,rent_price,bedrooms,neighborhood,url,desc
+"INSERT INTO listings (listing_id,title,rent_price,bedrooms,neighborhood,url,desc"
 (lid, listing["title"], listing["rent_price"], listing["bedrooms"],
 listing["neighborhood"], listing["url"], listing["description"],
 listing.get("source", "unknown"), now, now, ph),
