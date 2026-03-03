@@ -22,7 +22,7 @@ MIN_RENT = 1800
 TARGET_ZIP = "91776"
 RSS_FEEDS = []
 APIFY_ACTOR = "tri_angle/real-estate-aggregator"
-APIFY_RUN_URL = "https://api.apify.com/v2/acts/" + APIFY_ACTOR + "/run-sync-get-dataset-items
+APIFY_RUN_URL = "https://api.apify.com/v2/acts/" + APIFY_ACTOR + "/run-sync-get-dataset-items"
 APIFY_INPUT = {
 "location": TARGET_ZIP,
 "offerType": "rent",
