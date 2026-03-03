@@ -184,7 +184,10 @@ def collect_apify():
                 url = urls[0] if urls else ""
             else:
                 url = str(urls) if urls else ""
-            title = item.get("streetAddress") or item.get("address") or "Rental"
+            street = item.get("street") or ""
+            city   = item.get("city") or "San Gabriel"
+            state  = item.get("state") or "CA"
+            title  = (street + ", " + city + " " + state).strip(", ") or "Rental"
             desc  = item.get("description") or item.get("homeDescription") or ""
             addr  = item.get("address", "")
             hood  = item.get("neighborhood") or item.get("city") or (addr.split(",")[-2].strip() if "," in addr else "San Gabriel")
